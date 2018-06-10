@@ -5,21 +5,114 @@ output:
     keep_md: true
 ---
 
+```{r results='hide'}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+```
+
 
 ## Loading and preprocessing the data
 
+The dataset includes 3 variables described below:
+* **steps**: Number of steps taking in a 5-minute interval (missing values are coded as `NA`)
+* **date**: The date on which the measurement was taken in YYYY-MM-DD format
+* **interval**: Identifier for the 5-minute interval in which measurement was taken
+
+```{r}
+unzip("activity.zip")
+data <- read.csv("activity.csv", header=T, sep=",", stringsAsFactors = F)
+data <- transform(data, date = ymd(date))
+head(data)
+```
 
 
 ## What is mean total number of steps taken per day?
 
+In the following summary the mean and median of the steps taken by day was computed with the mean represented in the plot.
+
+```{r}
+steps_summary <- data %>% 
+    filter(!is.na(steps)) %>% 
+    group_by(date) %>% 
+    summarize(
+        mean = mean(steps, na.rm = TRUE), 
+        median = median(steps, na.rm = TRUE))
+
+hist(steps_summary$mean, 
+     col="gray80", 
+     main="Mean of total number steps taken by day",
+     xlab="Mean of steps quantity")
+```
+```{r}
+steps_summary
+
+```
+
 
 
 ## What is the average daily activity pattern?
+```{r}
+avgday <- data %>%
+    group_by(interval) %>% 
+    summarise(mean = mean(steps, na.rm=T))
+
+plot(avgday$mean, type="l", 
+     main="Average of 5 minute interval across all days",
+     ylab = "Average by interval",
+     xlab = "5 minute interval")
+
+```
 
 
 
 ## Imputing missing values
+The dataset has **`r filter(data, is.na(steps)) %>% count()`**  missing values in the variable `step`.
+
+As strategy to fill the NA values we will use the average steps in the interval across all days. Note that when we remove the NA values in the first plot the distribuition became Normal distributed, when the NA values was substituted with the average of the interval the distribution became right skewed.
+```{r}
+
+# Create a new dataset that is equal to the original dataset but with the missing data filled in.
+data_fill <- data %>% 
+    group_by(interval) %>% 
+    mutate(steps = ifelse(is.na(steps), mean(steps, na.rm = T), steps))
+
+# Calculate and report the mean and median total number of steps taken per day
+fill_summary <- data_fill %>% 
+    summarize(
+        mean = mean(steps), 
+        median = median(steps))
+
+# histogram with the new data
+hist(fill_summary$mean, 
+     col="gray80", 
+     main="Mean of total number steps taken by day",
+     xlab="Mean of steps quantity")
+
+fill_summary
+
+
+```
 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+In the plots below we could see that in the week days there is a greate number of steps between interval 800 and 950 while in the weekend the steps are equilibrated during the day.
+```{r}
+days <- data_fill %>% 
+    mutate(day = as.factor(ifelse(wday(date) %in% c(1, 7), "weekend", "weekday"))) %>% 
+    group_by(day, interval) %>% 
+    summarize(mean = mean(steps))
+
+weekday <- filter(days, day == "weekday")
+weekend <- filter(days, day == "weekend")
+
+ggplot(days, aes(interval, mean)) +
+    geom_line() +
+    theme_bw() +
+    facet_wrap(~day, nrow = 2)
+
+```
+
+
